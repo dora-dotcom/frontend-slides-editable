@@ -63,7 +63,8 @@ If you only need the smallest read-only output, use the parent **frontend-slides
 - **完整可编辑运行时**：支持拖拽、缩放、文本格式化、缩略图侧栏和历史记录
 - **PPT 转换**：将 `.pptx` 转为可编辑网页幻灯片并保留资源
 - **视口安全**：每一页都要求适配视口，不允许内部滚动
-- **持久化与导出**：`Ctrl+S` 保存结构化状态；导出时剥离临时编辑态
+- **持久化与导出**：`Ctrl+S` 保存结构化状态；Export HTML 剥离临时编辑态；Export PDF 生成固定像素尺寸文件（16:9 / 4:3）
+- **图片支持**：侧边栏 ＋ Add Image 上传图片对象；双击图片对象可替换；支持背景图替换
 - **反模板感**：通过精选风格预设，避免千篇一律
 
 - **Zero dependencies**: Single-file HTML with inline CSS/JS, no npm/build/framework
@@ -71,7 +72,8 @@ If you only need the smallest read-only output, use the parent **frontend-slides
 - **Full editable runtime**: drag/resize/text formatting/filmstrip/history included
 - **PPT conversion**: convert `.pptx` into editable web slides with preserved assets
 - **Viewport-safe output**: every slide must fit the viewport without internal scrolling
-- **Persistence + export**: `Ctrl+S` saves structure; export removes transient edit state
+- **Persistence + export**: `Ctrl+S` saves structure; Export HTML strips edit state; Export PDF produces a fixed-pixel file (16:9 or 4:3) via native browser print — no quality loss
+- **Image support**: sidebar ＋ Add Image uploads a new image object; double-click any graphic to replace it; background replacement supported per slide
 - **Anti-generic aesthetics**: curated presets over bland default templates
 
 ## 适合什么场景 / When To Use This
@@ -210,7 +212,10 @@ Generated decks include:
 - **富文本工具栏 / Rich text toolbar**：支持 **粗体/斜体/字体/字号**
 - **历史记录 / History**：`Ctrl+Z`、`Ctrl+Y`、`Ctrl+Shift+Z` 及 macOS 等价键
 - **持久化 / Persistence**：`Ctrl+S` 保存完整 `.slides-offset` 到 `localStorage`
-- **导出 / Export**：下载不含临时编辑态与选中态类名的干净 `.html`
+- **Export HTML**：下载不含临时编辑态与选中态类名的干净 `.html`（可演示版）
+- **Export PDF**：侧边栏选择 16:9 或 4:3，在新标签页生成固定像素 HTML 并自动触发打印对话框
+- **图片上传 / Image upload**：侧边栏 **＋ Add Image** 上传图片到当前幻灯片；双击图片对象可替换
+- **背景替换 / Background replace**：编辑模式下悬停幻灯片背景区域，点击 **📷 Replace background** 按钮上传新背景图
 
 ## 内置风格 / Included Styles
 

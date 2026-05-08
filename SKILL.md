@@ -1,6 +1,6 @@
 ---
 name: frontend-slides-editable
-description: Use when the user wants a single-file HTML presentation that stays editable in the browser after generation, or needs object-level layout editing, slide reordering, local save/export, or PPT-to-web conversion with continued editing.
+description: Use when the user wants a single-file HTML presentation that stays editable in the browser after generation. Features: object drag/resize, multi-select, snap alignment, rich text toolbar, undo/redo, Pages sidebar (thumbnails, reorder, delete), image upload, background replace, Export HTML, Export PDF (fixed-px, print-quality), Ctrl+S localStorage save. Supports PPT-to-web conversion and design system auto-detection (reads design.md/brand.md/tokens.json to skip style discovery).
 ---
 
 # Frontend Slides (Editable)
@@ -22,18 +22,45 @@ This skill is a **copy of the `frontend-slides` skill** extended with the editab
 
 If runtime constraints ever conflict with a signature element, **adapt the element** (e.g. implement the same visual with CSS, or split into multiple objects) — do **not** drop preset identity for the sake of a single template.
 
-## Discovery gate (do not skip)
+## Context scan (run before anything else)
 
-Models often jump straight to generating HTML. **For Mode A (new deck) and Mode B (PPT) after extraction, you must run discovery before Phase 3** — unless the user explicitly opts out with a **complete brief** in one message (purpose, length, content or full outline, style direction, image situation, and either explicit confirmation they want the editable runtime or direct invocation of this skill).
+Before asking any questions, **scan what you already know**. The goal is to ask only for what is genuinely missing — not to run a fixed checklist regardless of context.
 
-**Default behavior:**
+### Step 1 — Check for a design system
 
-1. **Stop and ask** — Send the Phase 1 questions (and Phase 2 path / mood / previews as the flow requires) in **one grouped message**; use a structured question UI when the host supports it.
-2. **Never infer silence as approval** — If the user only said "make slides about X", treat that as topic-only and still ask Phase 1 (and Phase 2 before codegen).
-3. **Partial answers** — If they answered some fields but not others, ask **only the missing items** in one follow-up, then continue.
-4. **Mode C** — If they gave a precise change list ("add one bullet", "fix overflow on slide 3"), you may apply it without re-running Phase 1–2; if the request is vague ("make it better"), ask 1–2 clarifying questions first.
+Look for any of these in the working directory (or a path the user mentioned):
 
-Skipping discovery to "save turns" is a failure mode for this skill.
+```
+design.md / design-system.md / brand.md / brand-guidelines.md
+STYLE_GUIDE.md / style-guide.md
+tokens.json / design-tokens.json / theme.json
+```
+
+**If found:** Read the file. Extract colors, fonts, spacing, and component patterns. **Skip Phase 1 Style Pref question and all of Phase 2** — the design language is already defined. Note to user: "Found `design.md` — using your design system. Skipping style selection."
+
+**If not found:** Proceed with Phase 1–2 as normal.
+
+### Step 2 — Score what you already know
+
+Tally how many of the five essentials are already answered from context (conversation, attached files, CLAUDE.md, prior turns):
+
+| Essential | Covered if… |
+|---|---|
+| **Purpose** | User stated audience, use case, or occasion |
+| **Length** | User stated slide count, or content implies it |
+| **Content** | User pasted outline, doc, or bullet points |
+| **Style** | Design system found, preset named, or strong style signal given |
+| **Images** | User explicitly said "no images" or provided files/links |
+
+- **All 5 covered** → skip directly to Phase 3. Do not ask anything.
+- **3–4 covered** → ask only the missing items in one short message, then proceed.
+- **0–2 covered** → run the full Phase 1 grouped question, then Phase 2.
+
+### Step 3 — Agent / programmatic invocation
+
+If this skill is being called by an automated agent (not directly by the user typing a message), assume the invoking agent has already gathered context. Apply the same scoring above — do not re-ask questions the agent context already answers. Generate and deliver without unnecessary confirmation loops.
+
+**The only reason to stop and ask is genuine missing information. Never ask to ask.**
 
 ## Core Principles
 
@@ -113,18 +140,21 @@ When enhancing existing presentations, viewport fitting is the biggest risk:
 
 ## Phase 1: Content Discovery (New Presentations)
 
-**Ask ALL discovery questions (1–6 below) in one grouped interaction** so the user can answer them together. Use a structured question tool when available; otherwise ask them in one concise message instead of splitting them across many turns:
+**Only ask for what the context scan (above) identified as missing.** If all essentials are already known, skip this phase entirely and go to Phase 2 (or Phase 3 if design system was found).
 
-**Question 1 — Purpose** (header: "Purpose"):
+When questions are needed, send them all in one grouped message — never split across turns. Use a structured question UI when the host supports it.
+
+**Question 1 — Purpose** *(skip if already known)*
 What is this presentation for? Options: Pitch deck / Teaching-Tutorial / Conference talk / Internal presentation
 
-**Question 2 — Length** (header: "Length"):
+**Question 2 — Length** *(skip if already known)*
 Approximately how many slides? Options: Short 5-10 / Medium 10-20 / Long 20+
 
-**Question 3 — Content** (header: "Content"):
+**Question 3 — Content** *(skip if user already provided content)*
 Do you have content ready? Options: All content ready / Rough notes / Topic only
+→ If they have content, ask them to paste or attach it in the same message.
 
-**Question 4 — Style preference** (header: "Style Pref"):
+**Question 4 — Style preference** *(skip if design system found or preset already named)*
 What visual direction sounds closest as a starting point? Options:
 - "Recommend for me" — infer from audience, topic, and content
 - "Clean / Professional" — restrained, polished, trustworthy
@@ -133,13 +163,10 @@ What visual direction sounds closest as a starting point? Options:
 - "Technical / Minimal" — precise, structured, product-like
 - "I already know the preset" — skip to a direct preset choice
 
-**Question 5 — Editing scope** (header: "Editing"):
-Confirm the user wants the **full editable runtime** (default for this skill): object layout, Pages sidebar, undo/redo. If they explicitly want a **minimal read-only** file only, switch to the parent **frontend-slides** skill instead — do not strip the runtime from this skill arbitrarily.
+**Question 5 — Assets / images** *(skip if user explicitly said no images or already provided them)*
+Will this deck use image files you will provide? Options: **No images** (CSS/graphics only) / **Yes — I will provide images** / **Unsure — recommend**
 
-**Question 6 — Assets / images** (header: "Images"):
-Will this deck use image files you will provide (folder, uploads, or links)? Options: **No images** (CSS/graphics only) / **Yes — I will provide images** / **Unsure — recommend**
-
-If the user has draft content (bullets, doc, outline), ask them to **paste or attach** it in the same turn or immediately after Phase 1.
+> **Note on editing runtime:** This skill always ships the full editable runtime by default. Only ask if the user explicitly signals they want a read-only file — if so, switch to the parent `frontend-slides` skill instead.
 
 ### Step 1.2: Image Evaluation (if images provided)
 
@@ -158,7 +185,12 @@ If user provides an image folder:
 
 ## Phase 2: Style Discovery
 
-**This is the "show, don't tell" phase.** Most people can't articulate design preferences in words.
+**Skip this phase entirely if:**
+- A design system file was found in the context scan → use it directly, go to Phase 3
+- The user named a specific preset or provided strong visual direction → go to Phase 3
+- An agent invocation already includes style context → go to Phase 3
+
+**This is the "show, don't tell" phase** for cases where style is still open. Most people can't articulate design preferences in words.
 
 ### Step 2.0: Style Preference First
 
@@ -266,7 +298,7 @@ When converting PowerPoint files:
 ## Phase 5: Delivery
 
 1. **Clean up** — Delete the temporary slide-previews folder (see Phase 2) if it exists
-2. **Smoke check (quick)** — Before handing off: open the file once; confirm **no in-slide scrolling** at ~1280×720; in edit mode, open **Pages**, reorder one slide and refresh — **no duplicate slides** (regression guard); **Export HTML** opens and runs standalone
+2. **Smoke check (quick)** — Before handing off: open the file once; confirm **no in-slide scrolling** at ~1280×720; in edit mode, open **Pages**, reorder one slide and refresh — **no duplicate slides** (regression guard); **Export HTML** opens and runs standalone; **Export PDF** opens a new tab and auto-prints
 3. **Open** — Launch in default browser: **macOS** `open [filename].html`; **Linux** `xdg-open [filename].html`; **Windows** `start [filename].html`
 4. **Summarize** — Tell the user:
    - File location, style name, slide count
@@ -276,7 +308,9 @@ When converting PowerPoint files:
    - **Objects:** drag **⠿** to move; drag **corner resize** on selected objects to change width/height (text reflows); **Ctrl+click** multi-select (macOS: **Control** key); **Delete/Backspace** removes selection (confirm if 2+)
    - **Snap:** aligns to **slide center** and **other objects** — not to the outer slide edges
    - **Text:** click text to type; floating toolbar for bold/italic/**font**/**size** (visible with caret, no need to select a range); **Ctrl+Z** / **Ctrl+Y** or **Ctrl+Shift+Z**; **Cmd+Z** / **Cmd+Y** / **Cmd+Shift+Z** on macOS when not typing in `contenteditable`
-   - **Save** (`#btnSave`, top-left next to **Edit** / **Pages** when editing — same hover reveal) or **Ctrl+S** / **Cmd+S** saves the full deck structure to localStorage; **Export HTML** remains in the Pages sidebar and should strip transient edit state
+   - **Save** (`#btnSave`, top-left next to **Edit** / **Pages** when editing — same hover reveal) or **Ctrl+S** / **Cmd+S** saves the full deck structure to localStorage
+   - **Pages sidebar** (in edit mode) contains: **＋ Add Image** (uploads an image as a new object on the current slide), **Export PDF** (choose 16:9 or 4:3 → opens a fixed-px print page in a new tab → auto-prints), **Export HTML** (clean standalone file, strips edit state)
+   - **Images:** double-click any graphic object to replace its image; slides with a replaceable background show a **📷 Replace background** button when edit mode is on (hover the left panel)
    - How to customize: slide theme `:root` variables, **`--deck-chrome-*`** for edit UI (see [STYLE_PRESETS.md](STYLE_PRESETS.md) §Deck chrome tokens), font link, `.reveal` animations; keep `data-oid` unique when adding objects
 
 ---

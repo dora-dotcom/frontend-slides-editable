@@ -148,7 +148,136 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 | Save | **Save** button in `#deckLeftHover` (row with Edit/Pages, edit mode only, hover-revealed) or `Ctrl+S` / **Cmd+S** |
 | Bold / italic / font / size | Floating `#rteToolbar` when text is focused |
 | Save to localStorage | `Ctrl+S` saves the full `.slides-offset` structure, not just per-slide inner HTML |
-| Export HTML | Sidebar button in reference; export should strip edit-mode / selected-state classes |
+| Export HTML | Sidebar button; strips edit-mode / selected-state classes; produces self-contained responsive file |
+| Export PDF | Sidebar button → ratio picker (16:9 / 4:3) → builds a fresh fixed-px HTML, opens in new tab, auto-prints; **never** uses CSS transform scaling — see §Export PDF |
+| Add image | **＋ Image** button in sidebar (edit mode) → file picker → creates graphic slide object on current slide |
+| Replace image | **Double-click** any `[data-object-type="graphic"]` slide object → file picker → replaces `<img>` src; supports undo |
+| Replace slide background | `.slide-bg-replace-btn[data-bg-target="<CSS selector>"]` button → file picker → sets `style.backgroundImage` on target element; supports undo |
+
+## Export PDF (fixed-px content injection)
+
+**Never use CSS `transform: scale()` for PDF export.** Browsers capture a pixel-exact screenshot at print time; scaling a viewport-unit layout down to the target page size produces blurry, color-degraded output identical to a low-resolution screenshot.
+
+### Correct approach: build a fresh fixed-px HTML at target resolution
+
+1. **Define a baseline layout** at a convenient fixed resolution (e.g. 1200×750 for 8:5, which maps cleanly to 16:9 and 4:3). This baseline has its own CSS with all sizes in plain `px` — no `clamp()`, no `vw`/`vh`.
+
+2. **Extract current content from the live DOM** via `[data-oid]` selectors:
+   ```javascript
+   function txt(oid) {
+     var el = document.querySelector('[data-oid="' + oid + '"] .slide-object-text');
+     return el ? el.innerHTML : '';
+   }
+   // Background image: prefer inline style (user-replaced), then computed CSS
+   var bgEl = document.querySelector('.left-bg');
+   var bgImage = (bgEl && bgEl.style.backgroundImage && bgEl.style.backgroundImage !== 'none')
+     ? bgEl.style.backgroundImage
+     : (bgEl ? getComputedStyle(bgEl).backgroundImage : 'none');
+   // Logo / other image elements
+   var logoSrc = document.querySelector('img.logo-static').src;
+   ```
+
+3. **Scale baseline px values to target dimensions** (W×H chosen by user — e.g. 1920×1080 for 16:9):
+   ```javascript
+   var BW = 1200, BH = 750;
+   var sx = W / BW, sy = H / BH, s = (sx + sy) / 2; // s for fonts/radii
+   function px(v) { return Math.round(v) + 'px'; }
+   // Example:
+   // '.bm-n { font-size:' + px(24*s) + '; }'
+   // '.page { grid-template-columns:' + px(460*sx) + ' 1fr; }'
+   ```
+
+4. **Assemble a self-contained print HTML** with the scaled CSS and injected content, then open via Blob URL:
+   ```javascript
+   var printHTML = '<!DOCTYPE html>...<style>' + css + '</style>...'
+     + '<div class="page"><div class="left">...</div><div class="right">...</div></div>'
+     + '<script>document.fonts.ready.then(function() {'
+     + '  setTimeout(function() { window.print(); }, 500);'
+     + '});<\/script>';
+   var blob = new Blob([printHTML], { type: 'text/html; charset=utf-8' });
+   window.open(URL.createObjectURL(blob), '_blank');
+   ```
+   The `@page { size: Wpx Hpx; margin: 0; }` rule in the print CSS makes the browser produce a PDF of exactly that size, natively rendered — no scaling, no quality loss.
+
+### Design of the baseline CSS
+
+The baseline CSS duplicates the visual design of the editable deck (same fonts, colors, layout proportions) but uses **only fixed `px` values**. Key mapping:
+
+| Editable deck (viewport-unit CSS) | Baseline print CSS |
+|---|---|
+| `clamp(8px, 0.83vw, 10px)` | `px(10 * s)` |
+| `clamp(20px, 2.67vw, 36px)` | `px(32 * s)` |
+| `38.33%` left column | `px(460 * sx)` column |
+| `grid-template-columns: 38.33% 1fr` | `grid-template-columns: ${px(460*sx)} 1fr` |
+
+This is the **only** path that preserves backgrounds, gradients, custom fonts, and colors in print output across browsers.
+
+### Multi-slide PDF (looping through deck slides)
+
+For decks with more than one slide, iterate the live DOM slides and build one `.page` div per slide. Each page gets `page-break-after: always` (except the last) so the browser paginates correctly.
+
+```javascript
+// Collect real slides (NOT sidebar thumbnail clones)
+var deckRoot = document.querySelector('.slides-offset');
+var slides = Array.from(deckRoot.querySelectorAll(':scope > section.slide'));
+
+// Helper: extract inline or computed background-image from an element
+function bgImage(sel) {
+  var el = document.querySelector(sel);
+  if (!el) return 'none';
+  return (el.style.backgroundImage && el.style.backgroundImage !== 'none')
+    ? el.style.backgroundImage
+    : getComputedStyle(el).backgroundImage;
+}
+
+// Helper: get text content of a data-oid object
+function txt(oid) {
+  var el = document.querySelector('[data-oid="' + oid + '"] .slide-object-text');
+  return el ? el.innerHTML : '';
+}
+
+// Build one page HTML string per slide
+var pages = slides.map(function(slide, i) {
+  var slideId = slide.id; // e.g. "slide-0"
+  // Extract objects from this slide by scoping selectors to slideId
+  var h1El = slide.querySelector('[data-oid] .slide-object-text');
+  // Or use OID-based helpers scoped to this slide's known OID prefix (e.g. "s" + i + "-")
+  var bg = (slide.querySelector('.slide-bg') && slide.querySelector('.slide-bg').style.backgroundImage)
+    || getComputedStyle(slide).backgroundImage || 'none';
+
+  return '<div class="page" style="' + (i < slides.length - 1 ? 'page-break-after:always;' : '') + '">'
+    + '<!-- slide ' + (i+1) + ' content -->'
+    + '</div>';
+});
+
+var printHTML = '<!DOCTYPE html><html><head>'
+  + '<style>'
+  + '@media print { @page { size: ' + W + 'px ' + H + 'px; margin: 0; } body { margin: 0; } }'
+  + '.page { width:' + px(BW*sx) + '; height:' + px(BH*sy) + '; position:relative; overflow:hidden; }'
+  + '/* ... rest of fixed-px CSS ... */'
+  + '</style></head><body>'
+  + pages.join('')
+  + '<script>document.fonts.ready.then(function(){ setTimeout(function(){ window.print(); }, 500); });<\/script>'
+  + '</body></html>';
+
+var blob = new Blob([printHTML], { type: 'text/html; charset=utf-8' });
+window.open(URL.createObjectURL(blob), '_blank');
+```
+
+**OID namespacing for multi-slide:** When generating a multi-slide deck, prefix each slide's object OIDs with the slide index (e.g. `s0-title`, `s1-title`, `s2-title`). The PDF builder can then extract per-slide content by scoping `querySelector` to the slide element or by pattern-matching OIDs to the slide index.
+
+**Background images per slide:** Each slide may have its own background element. Extract it by querying within the slide node:
+```javascript
+slides.forEach(function(slide, i) {
+  var bgEl = slide.querySelector('[data-bg-target], .slide-bg, .left-bg');
+  var bg = bgEl
+    ? ((bgEl.style.backgroundImage && bgEl.style.backgroundImage !== 'none')
+        ? bgEl.style.backgroundImage
+        : getComputedStyle(bgEl).backgroundImage)
+    : 'none';
+  // Use `bg` in this slide's fixed-px CSS
+});
+```
 
 ## Text editing `focusout` / history
 
@@ -164,6 +293,9 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 5. Define **slide theme** and **`--deck-chrome-*`** on `:root`; chrome CSS uses variables only.
 6. Copy **deck runtime** from `examples/editable-deck-reference.html` (CSS + JS) or inline equivalent — keep `STORAGE_KEY` / deck id meta consistent if user needs multiple files.
 7. After generating, verify at 1280×720: no slide overflow, handles visible only in edit mode.
+8. Include `<input type="file" id="deckImgInput" accept="image/*" style="display:none">` and `<input type="file" id="deckBgInput" accept="image/*" style="display:none">` in the `<body>` for image upload features.
+9. For any slide that has a replaceable background element, add `<div class="slide-bg-replace-anchor"><button class="slide-bg-replace-btn" data-bg-target="#your-bg-element-id">📷 Replace background</button></div>` inside the slide.
+10. **Export PDF button** (`#btnExportPdf`) in the sidebar: implement using the fixed-px content injection approach (§Export PDF), **not** CSS `transform: scale()`. Write a baseline CSS that mirrors the deck's visual design in fixed px, extract content via `[data-oid]` selectors, scale by `W/BW` and `H/BH`, and open via Blob URL with `@page { size: Wpx Hpx; margin: 0; }` + `document.fonts.ready` auto-print.
 
 ## Files
 

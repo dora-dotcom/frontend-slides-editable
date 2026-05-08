@@ -269,7 +269,7 @@
     .deck-edit-chrome .deck-btn-done:hover:not(:disabled) {
       filter: brightness(1.08);
     }
-    .deck-edit-chrome svg { width: 18px; height: 18px; fill: currentColor; }
+    .deck-edit-chrome svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
     .edit-toggle, .sidebar-pages-toggle, .deck-btn-save {
       position: relative;
@@ -398,6 +398,37 @@
     }
 
     body.deck-edit-mode.slide-anim-paused .reveal { transition: none !important; }
+
+    /* === Image features === */
+    /* Add-image button in edit chrome */
+    .deck-btn-add-img {
+      flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 36px; padding: 0 12px; border-radius: 8px;
+      border: 1px solid var(--deck-chrome-border);
+      background: var(--deck-chrome-surface); color: var(--deck-chrome-text);
+      cursor: pointer; font-size: clamp(0.7rem, 1.1vw, 0.875rem);
+      font-weight: 500; white-space: nowrap;
+    }
+    .deck-btn-add-img:hover {
+      background: color-mix(in srgb, var(--deck-chrome-accent) 18%, var(--deck-chrome-surface));
+    }
+    /* Graphic objects show pointer cursor in edit mode */
+    body.deck-edit-mode [data-slide-object][data-object-type="graphic"] { cursor: pointer; }
+    /* Slide background replace button */
+    .slide-bg-replace-anchor {
+      position: absolute; z-index: 7; bottom: clamp(8px, 1.5vh, 16px); left: clamp(8px, 1.5vw, 16px);
+      display: none; pointer-events: auto;
+    }
+    body.deck-edit-mode .slide-bg-replace-anchor { display: block; }
+    .slide-bg-replace-btn {
+      font-size: clamp(9px, 0.85vw, 11px); font-weight: 600;
+      color: rgba(255,255,255,0.85); background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.25); border-radius: 6px;
+      padding: 5px 10px; cursor: pointer; letter-spacing: 0.03em;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .slide-bg-replace-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.5); }
   </style>
 </head>
 <body>
@@ -419,14 +450,19 @@
   </div>
 </div>
 
+<!-- hidden file inputs for image upload -->
+<input type="file" id="deckImgInput"   accept="image/*" style="display:none">
+<input type="file" id="deckBgInput"    accept="image/*" style="display:none">
+
 <div class="progress-bar" id="progressBar"></div>
 <nav class="nav-dots" id="navDots" aria-label="Slides"></nav>
 
 <aside class="slide-sidebar" id="slideSidebar" aria-label="Slide pages">
   <h3>Slides</h3>
   <div class="filmstrip-list" id="filmstripList"></div>
-  <div class="filmstrip-actions" style="margin-top:auto;">
-    <button type="button" id="btnExport">Export HTML</button>
+  <div class="filmstrip-actions" style="margin-top:auto;flex-direction:column;gap:6px;">
+    <button type="button" id="btnAddImage" style="width:100%;">＋ Add Image</button>
+    <button type="button" id="btnExport" style="width:100%;">Export HTML</button>
   </div>
 </aside>
 
@@ -1740,6 +1776,106 @@
       });
     }
   });
+
+  /* === Image features === */
+
+  // 1. Add image object to current slide
+  (function () {
+    var btn = document.getElementById('btnAddImage');
+    var inp = document.getElementById('deckImgInput');
+    if (!btn || !inp) return;
+    btn.addEventListener('click', function () { inp.click(); });
+    inp.addEventListener('change', function (e) {
+      var file = e.target.files[0]; if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        var src   = ev.target.result;
+        var slide = deck.slides[deck.current]; if (!slide) return;
+        var layer = slide.querySelector('.slide-edit-layer'); if (!layer) return;
+        var oid   = 's' + deck.current + '-img-' + Date.now();
+        var obj   = document.createElement('div');
+        obj.className = 'slide-object';
+        obj.setAttribute('data-slide-object', '');
+        obj.setAttribute('data-oid', oid);
+        obj.setAttribute('data-object-type', 'graphic');
+        obj.style.cssText = 'left:25%;top:20%;width:30%;height:40%;';
+        obj.innerHTML =
+          '<button type="button" class="slide-object-move" aria-label="Move">⠿</button>' +
+          '<button type="button" class="slide-object-resize" aria-label="Resize"></button>' +
+          '<div class="slide-object-graphic" style="width:100%;height:100%;">' +
+          '<img src="' + src + '" alt="" style="max-height:none;width:100%;height:100%;object-fit:contain;pointer-events:none;display:block;">' +
+          '</div>';
+        layer.appendChild(obj);
+        ensureResizeHandles(layer);
+        history.push({
+          undo: function () { var n = document.querySelector('[data-oid="' + oid + '"]'); if (n) n.remove(); },
+          redo: function () { layer.appendChild(obj); ensureResizeHandles(layer); }
+        });
+        updateUndoRedoChrome();
+      };
+      reader.readAsDataURL(file);
+      inp.value = '';
+    });
+  })();
+
+  // 2. Double-click graphic object → replace its image
+  document.addEventListener('dblclick', function (e) {
+    if (!editor.active) return;
+    var obj = e.target.closest && e.target.closest('[data-slide-object][data-object-type="graphic"]');
+    if (!obj) return;
+    var imgEl = obj.querySelector('img'); if (!imgEl) return;
+    var tmp = document.createElement('input');
+    tmp.type = 'file'; tmp.accept = 'image/*'; tmp.style.display = 'none';
+    document.body.appendChild(tmp);
+    tmp.click();
+    tmp.addEventListener('change', function (ev) {
+      var file = ev.target.files[0]; if (!file) { tmp.remove(); return; }
+      var reader = new FileReader();
+      reader.onload = function (re) {
+        var prev = imgEl.getAttribute('src');
+        var next = re.target.result;
+        imgEl.src = next;
+        history.push({
+          undo: function () { imgEl.src = prev; },
+          redo: function () { imgEl.src = next; }
+        });
+        updateUndoRedoChrome();
+        tmp.remove();
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  // 3. Slide background replace — reads data-bg-target="selector" on .slide-bg-replace-btn
+  document.addEventListener('click', function (e) {
+    if (!editor.active) return;
+    var btn = e.target.closest && e.target.closest('.slide-bg-replace-btn[data-bg-target]');
+    if (!btn) return;
+    var inp2 = document.getElementById('deckBgInput'); if (!inp2) return;
+    inp2._bgTarget = btn.getAttribute('data-bg-target');
+    inp2.click();
+  });
+  (function () {
+    var inp2 = document.getElementById('deckBgInput'); if (!inp2) return;
+    inp2.addEventListener('change', function (e) {
+      var file = e.target.files[0]; if (!file) return;
+      var sel = inp2._bgTarget; if (!sel) return;
+      var el = document.querySelector(sel); if (!el) return;
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        var prev = el.style.backgroundImage;
+        var next = "url('" + ev.target.result + "')";
+        el.style.backgroundImage = next;
+        history.push({
+          undo: function () { el.style.backgroundImage = prev; },
+          redo: function () { el.style.backgroundImage = next; }
+        });
+        updateUndoRedoChrome();
+      };
+      reader.readAsDataURL(file);
+      inp2.value = '';
+    });
+  })();
 
   deck._updateChrome();
 })();
