@@ -47,6 +47,7 @@ If you only need the smallest read-only output, use the parent **frontend-slides
 | **Context Scan（自适应发现）** | 在提问前先扫描已有上下文，只问真正缺失的信息；全部已知则直接生成 |
 | **Design System 自动检测** | 检测到 `design.md` / `brand.md` / `tokens.json` 等文件时，自动跳过风格选择阶段 |
 | **Agent 调用优化** | Agent 或自动化流程调用时不重复询问上下文已有的信息 |
+| **字号连续调节** | 富文本工具栏改为 A−/A+ 步进按钮（±1px），取代 S/M/L/XL 固定档位，可无限精确调节 |
 
 | Feature | Description |
 |------|------|
@@ -57,6 +58,7 @@ If you only need the smallest read-only output, use the parent **frontend-slides
 | **Context Scan (adaptive discovery)** | Scans existing context before asking questions; skips phases when information is already known; generates directly if all 5 essentials are covered |
 | **Design System auto-detection** | Detects `design.md` / `brand.md` / `tokens.json` etc. and skips style selection entirely |
 | **Agent invocation support** | When called by an agent, does not re-ask what the invoking context already knows |
+| **Continuous font size (A−/A+)** | Toolbar replaces S/M/L/XL presets with step buttons: each click reads computed `px` size and adjusts ±1px with full undo/redo support |
 
 ## Skill 对照表 / Skill Comparison
 
@@ -155,7 +157,7 @@ Generated decks include:
 - **编辑模式 / Edit mode**：按 `E` 或从左上角悬停呼出控件
 - **Pages 侧栏 / Pages sidebar**：缩略图导航、重排、删除
 - **对象编辑 / Object editing**：用 **⠿** 拖动，角点缩放，吸附线对齐幻灯片中心与其他对象
-- **富文本工具栏 / Rich text toolbar**：支持 **粗体/斜体/字体/字号**
+- **富文本工具栏 / Rich text toolbar**：**粗体/斜体/字体**，字号用 **A− / A+** 步进（±1px，无上限，含 Undo）
 - **历史记录 / History**：`Ctrl+Z`、`Ctrl+Y`、`Ctrl+Shift+Z` 及 macOS 等价键
 - **持久化 / Persistence**：`Ctrl+S` 保存完整 `.slides-offset` 到 `localStorage`
 - **Export HTML**：下载不含临时编辑态与选中态类名的干净 `.html`
