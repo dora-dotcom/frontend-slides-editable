@@ -475,11 +475,8 @@
     <button type="button" data-font="var(--font-display)">Display</button>
   </span>
   <span class="rte-toolbar-group" aria-label="Font size">
-    <span class="rte-toolbar-meta">Size</span>
-    <button type="button" data-size="0.85">S</button>
-    <button type="button" data-size="1">M</button>
-    <button type="button" data-size="1.2">L</button>
-    <button type="button" data-size="1.45">XL</button>
+    <button type="button" data-size-step="-1" title="Smaller (1px)">A−</button>
+    <button type="button" data-size-step="1" title="Larger (1px)">A+</button>
   </span>
 </div>
 
@@ -1181,21 +1178,20 @@
         btn.addEventListener('mousedown', (ev) => ev.preventDefault());
         btn.addEventListener('click', () => this._exec(btn.getAttribute('data-cmd')));
       });
-      this.toolbar.querySelectorAll('button[data-size]').forEach((btn) => {
+      this.toolbar.querySelectorAll('button[data-size-step]').forEach((btn) => {
         btn.addEventListener('mousedown', (ev) => ev.preventDefault());
         btn.addEventListener('click', () => {
-          const v = btn.getAttribute('data-size');
-          if (!v) return;
+          const step = parseInt(btn.getAttribute('data-size-step'), 10);
           const textEl = this._activeTextEl();
           if (!textEl) return;
-          const beforeHtml = textEl.innerHTML;
-          const fac = parseFloat(v, 10);
-          this._applyFontSizeFactor(textEl, fac);
-          const afterHtml = textEl.innerHTML;
-          if (beforeHtml !== afterHtml) {
+          const beforeStyle = textEl.style.fontSize;
+          const cur = parseFloat(getComputedStyle(textEl).fontSize) || 16;
+          textEl.style.fontSize = Math.max(8, cur + step) + 'px';
+          const afterStyle = textEl.style.fontSize;
+          if (beforeStyle !== afterStyle) {
             this.history.push({
-              undo: () => { textEl.innerHTML = beforeHtml; },
-              redo: () => { textEl.innerHTML = afterHtml; }
+              undo: () => { textEl.style.fontSize = beforeStyle; },
+              redo: () => { textEl.style.fontSize = afterStyle; }
             });
           }
           this._updateRteToolbar();

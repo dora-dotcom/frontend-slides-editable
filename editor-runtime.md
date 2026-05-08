@@ -131,7 +131,8 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 
 - Toolbar `#rteToolbar` is shown when a `.slide-object-text[contenteditable="true"]` is **focused** or when the selection/caret is inside such an element (including **collapsed** caret — user can bold / change size without pre-selecting text).
 - **Font + size controls** use toolbar **buttons**, not a native `<select>`, so `mousedown` can `preventDefault()` and keep the text field focused while formatting applies.
-- **Inline styling** uses `_applyInlineStyle()` to wrap the current selection (or insert a styled zero-width span at a collapsed caret). `_applyFontSizeFactor()` writes `font-size: clamp(...)`; `_applyFontFamily()` writes `font-family: var(--font-body|--font-display)`.
+- **Inline styling** uses `_applyInlineStyle()` to wrap the current selection (or insert a styled zero-width span at a collapsed caret). `_applyFontFamily()` writes `font-family: var(--font-body|--font-display)`.
+- **Font size** uses **A− / A+** step buttons (not S/M/L presets). Each click reads `parseFloat(getComputedStyle(textEl).fontSize)`, adds ±1 px, and writes back as `textEl.style.fontSize = Math.max(8, cur ± 1) + 'px'` — applied to the whole `.slide-object-text` element, not the selection. Undo/redo the `style.fontSize` change, not innerHTML.
 - **Bold / italic** state: toggle `.is-active` via `document.queryCommandState(...)` on `selectionchange` / after commands.
 - **Focus handoff:** `focusout` should not commit/close editing when focus moves into `#rteToolbar`; check `activeElement` / `relatedTarget` against the toolbar before setting `contenteditable="false"`.
 
