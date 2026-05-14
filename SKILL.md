@@ -277,7 +277,7 @@ If images were provided, the slide outline already incorporates them from Step 1
 - **Preset fidelity:** Implement **Layout** and **Signature Elements** from [STYLE_PRESETS.md](STYLE_PRESETS.md) for the selected style. Vary structure slide-to-slide and preset-to-preset; avoid a **single repeated title-slide prototype** across all aesthetics (parent skill does not do that).
 - **Every slide** `section.slide` must have a stable `id`; movable content lives in `.slide-edit-layer` as `[data-slide-object][data-oid]` per [editor-runtime.md](editor-runtime.md)
 - **Deck slide list:** Never use a global `querySelectorAll('section.slide')` when a filmstrip clones slides — use only slides under the deck wrapper (e.g. `.slides-offset` + `:scope > section.slide`). See [html-template.md](html-template.md) §Regression guard.
-- Embed the **editable deck runtime** (from the reference example): `SlideDeck`, object editor (select / drag / snap / RTE toolbar), `SlideSidebar`, `HistoryStack`, save/export
+- Embed the **editable deck runtime** (from the reference example): `SlideDeck`, object editor (select / drag / snap / RTE toolbar), `SlideSidebar`, `HistoryStack`, save/export. The sidebar **must** include both `#btnExport` (HTML) and `#btnExportPdf` (PDF), wired to the `exportHtml()` and `exportPdf()` functions copied verbatim from the reference. Do not invent a custom PDF implementation — copy it directly.
 - Use fonts from Fontshare or Google Fonts — never system fonts
 - Add detailed comments explaining each section
 - Every section needs a clear `/* === SECTION NAME === */` comment block
@@ -298,7 +298,7 @@ When converting PowerPoint files:
 ## Phase 5: Delivery
 
 1. **Clean up** — Delete the temporary slide-previews folder (see Phase 2) if it exists
-2. **Smoke check (quick)** — Before handing off: open the file once; confirm **no in-slide scrolling** at ~1280×720; in edit mode, open **Pages**, reorder one slide and refresh — **no duplicate slides** (regression guard); **Export HTML** opens and runs standalone; **Export PDF** opens a new tab and auto-prints
+2. **Smoke check (quick)** — Before handing off: open the file once; confirm **no in-slide scrolling** at ~1280×720; in edit mode, open **Pages**, reorder one slide and refresh — **no duplicate slides** (regression guard); **Export HTML** opens and runs standalone; **Export PDF** opens a new tab and auto-prints. If PDF is missing or broken, check the browser console — the startup self-check will log `[deck-runtime] Missing required element: #btnExportPdf` (or similar) to identify the gap; fix before delivering.
 3. **Open** — Launch in default browser: **macOS** `open [filename].html`; **Linux** `xdg-open [filename].html`; **Windows** `start [filename].html`
 4. **Summarize** — Tell the user:
    - File location, style name, slide count

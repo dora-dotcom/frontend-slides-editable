@@ -159,7 +159,52 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 
 **Never use CSS `transform: scale()` for PDF export.** Browsers capture a pixel-exact screenshot at print time; scaling a viewport-unit layout down to the target page size produces blurry, color-degraded output identical to a low-resolution screenshot.
 
-### Correct approach: build a fresh fixed-px HTML at target resolution
+### Universal approach: CSS override (copy from reference; works for any deck)
+
+This is the implementation in `examples/editable-deck-reference.html`. Use it by default — it requires no knowledge of per-deck content structure.
+
+**How it works:** clones the live DOM, strips UI chrome via CSS `display:none!important`, overrides `html`/`body`/`.slide` to fixed `1280×720px`, injects `@page{size:1280px 720px;margin:0}`, removes `<script>` tags, inserts an auto-print script, then opens via Blob URL. Because the page renders at exactly 1280×720 with no `transform`, viewport-unit values (`clamp()`, `vw`, `vh`) resolve correctly at print time — no scaling, no quality loss.
+
+```javascript
+function exportPdf() {
+  var PW = 1280, PH = 720;
+  var clone = document.documentElement.cloneNode(true);
+  sanitizeExportDocument(clone);          // strip edit-mode classes + chrome state
+  clone.querySelectorAll('script').forEach(function(s) { s.remove(); });
+
+  var style = document.createElement('style');
+  style.textContent = [
+    '@page{size:' + PW + 'px ' + PH + 'px;margin:0}',
+    '*,*::before,*::after{animation:none!important;transition:none!important}',
+    'html{scroll-snap-type:none!important;scroll-behavior:auto!important}',
+    'html,body{width:' + PW + 'px!important;height:auto!important;overflow:visible!important}',
+    '.slides-offset{display:block!important;width:' + PW + 'px!important}',
+    '.slide{width:' + PW + 'px!important;height:' + PH + 'px!important;max-height:' + PH + 'px!important;' +
+      'overflow:hidden!important;page-break-after:always!important;break-after:page!important}',
+    '.slide:last-child{page-break-after:avoid!important;break-after:avoid!important}',
+    '.progress-bar,.nav-dots,.deck-left-hover-anchor,.slide-sidebar,.rte-toolbar,' +
+      '.slide-bg-replace-anchor,.slide-object-move,.slide-object-resize{display:none!important}',
+    '.reveal{opacity:1!important;transform:none!important}'
+  ].join('\n');
+  clone.querySelector('head').appendChild(style);
+
+  var ps = document.createElement('script');
+  ps.textContent = 'document.fonts.ready.then(function(){setTimeout(function(){window.focus();window.print();},350);});';
+  clone.querySelector('body').appendChild(ps);
+
+  var blob = new Blob(['<!DOCTYPE html>\n' + clone.outerHTML], {type:'text/html;charset=utf-8'});
+  var url = URL.createObjectURL(blob);
+  var win = window.open(url, '_blank');
+  if (!win) { URL.revokeObjectURL(url); alert('Allow popups then retry.'); return; }
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+}
+```
+
+Wire the button: `document.getElementById('btnExportPdf').addEventListener('click', exportPdf);`
+
+**When to use the advanced approach below instead:** only when you need per-element pixel-perfect control (e.g., a split-panel layout where column widths must be exact fractions independent of viewport math). For most generated decks the universal approach above is sufficient.
+
+### Advanced approach: build a fresh fixed-px HTML at target resolution
 
 1. **Define a baseline layout** at a convenient fixed resolution (e.g. 1200×750 for 8:5, which maps cleanly to 16:9 and 4:3). This baseline has its own CSS with all sizes in plain `px` — no `clamp()`, no `vw`/`vh`.
 
