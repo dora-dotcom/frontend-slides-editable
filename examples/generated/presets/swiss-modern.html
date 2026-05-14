@@ -668,6 +668,7 @@
   <div class="filmstrip-list" id="filmstripList"></div>
   <div class="filmstrip-actions" style="margin-top:auto;">
     <button type="button" id="btnExport">Export HTML</button>
+    <button type="button" id="btnExportPdf" style="width:100%;">Export PDF</button>
   </div>
 </aside>
 
@@ -1870,6 +1871,59 @@
     a.click();
     URL.revokeObjectURL(a.href);
   }
+  function exportPdf() {
+    const PW = 1280, PH = 720;
+    const clone = document.documentElement.cloneNode(true);
+    sanitizeExportDocument(clone);
+    clone.querySelectorAll('script').forEach((s) => s.remove());
+
+    const style = document.createElement('style');
+    style.id = 'deck-print-override';
+    style.textContent = [
+      '@page{size:' + PW + 'px ' + PH + 'px;margin:0}',
+      '*,*::before,*::after{animation:none!important;transition:none!important}',
+      'html{scroll-snap-type:none!important;scroll-behavior:auto!important}',
+      'html,body{width:' + PW + 'px!important;height:auto!important;overflow:visible!important;background:#000!important}',
+      '.slides-offset{display:block!important;width:' + PW + 'px!important}',
+      '.slide{' +
+      '  width:' + PW + 'px!important;height:' + PH + 'px!important;' +
+      '  max-height:' + PH + 'px!important;overflow:hidden!important;' +
+      '  page-break-after:always!important;break-after:page!important;' +
+      '  position:relative!important;display:flex!important;flex-direction:column!important' +
+      '}',
+      '.slide:last-child{page-break-after:avoid!important;break-after:avoid!important}',
+      ['.progress-bar','.nav-dots','.deck-left-hover-anchor','#deckLeftHover',
+       '.slide-sidebar','#slideSidebar','.rte-toolbar','#rteToolbar',
+       '.slide-bg-replace-anchor','.slide-object-move','.slide-object-resize',
+       '.snap-line-v','.snap-line-h'].join(',') + '{display:none!important}',
+      '.reveal{opacity:1!important;transform:none!important}',
+      '.slide-edit-layer{pointer-events:none!important}'
+    ].join('\n');
+
+    const head = clone.querySelector('head');
+    if (head) head.appendChild(style);
+
+    const printScript = document.createElement('script');
+    printScript.textContent = [
+      'document.fonts.ready',
+      '  .then(function(){setTimeout(function(){window.focus();window.print();},350);})',
+      '  .catch(function(){setTimeout(function(){window.focus();window.print();},900);});'
+    ].join('');
+    const body = clone.querySelector('body');
+    if (body) body.appendChild(printScript);
+
+    const html = '<!DOCTYPE html>\n' + clone.outerHTML;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) {
+      URL.revokeObjectURL(url);
+      alert('PDF export blocked — please allow popups for this page, then try again.');
+      return;
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
 
   /* ---------- init ---------- */
   const btnUndo = document.getElementById('btnUndo');
@@ -2012,6 +2066,7 @@
 
   if (btnSave) btnSave.addEventListener('click', saveState);
   document.getElementById('btnExport').addEventListener('click', exportHtml);
+  document.getElementById('btnExportPdf').addEventListener('click', exportPdf);
 
   document.addEventListener('keydown', (e) => {
     const ce = e.target.closest && e.target.closest('.slide-object-text[contenteditable="true"]');
@@ -2084,6 +2139,11 @@
       });
     }
   });
+
+  // Startup self-check: warn if any critical runtime element is absent
+  (['editToggle','pagesToggle','deckEditChrome','btnExport','btnExportPdf','rteToolbar','filmstripList'])
+    .filter((id) => !document.getElementById(id))
+    .forEach((id) => console.error('[deck-runtime] Missing required element: #' + id));
 
   deck._updateChrome();
 })();
